@@ -8,7 +8,7 @@ const pruRoutes = require('./routes/registration');
 /* express app */
 const app = express();
 
-/* middleware */
+/* middleware that read json*/
 app.use(express.json())
 
 app.use((req, res, next) => {

@@ -7,13 +7,13 @@ const {v4: uuidv4} = require('uuid');
 const uuid = uuidv4();
 
 
-//insert new pru client record
+/* Add new client */
 exports.addPruClient = async (req, res) => {
     var ACTION = '[NEW-CLIENT-REGISTRATION]'
 
     const firstArray = req.body.personalInformation.firstName[0];
     const secondArray = req.body.personalInformation.middleName[0];
-    const user = firstArray+secondArray+ req.body.personalInformation.lastName.split(" ").join("");
+    const user = firstArray + secondArray + req.body.personalInformation.lastName.split(" ").join("");
     const capitallize = user.toUpperCase();
     const username = capitallize
 
@@ -49,27 +49,27 @@ exports.addPruClient = async (req, res) => {
             },
             "beneficiary": req.body.beneficiary
         })
-        console.log(req.body.beneficiary)
         /* Save new client Data */
         const savedData = await newClient.save();
-        Logger.log('info', TAG + ACTION + '[REFID:' + uuid + '] response: ', { message: "Successfuly save new client(s) record(s)."});
         let resp = {
                 message: "Successfully save new client" + " " + capitallize,
                 uuid: uuid,
                 trace: 'GUTZ-PRU'
         }
+        Logger.log('info', TAG + ACTION + '[REFID:' + uuid + '] response: ', { message: "Successfuly save new client(s) record(s)."});
         res.status(201).json(resp)
     }catch(error){
-        console.error('Error saving data:', error);
+        Logger.log('error', TAG + ACTION + '[REFID:' + uuid + '] response: ', {message: error.message});
+        res.status(500).json({ error: error.message });
     }
 }
-
 /* Get All Client*/
 exports.getAllClient = async (req, res) => {
-        var ACTION  = '[RETRIEVE-ALL-CLIENTS-RECORDS]'
-
+    var ACTION  = '[RETRIEVE-ALL-CLIENTS-RECORDS]'
+        
+    try{
         const getAllClients = await clientsInformation.find({}).sort({createdAt: -1})
-        Logger.log('info', TAG + ACTION + '[REFID:' + uuid + '] response: ', {message: "Successfully Retrieve all clients records"});
+
         if(getAllClients.length <= 0){
             Logger.log('error', TAG + ACTION + '[REFID:' + uuid + '] response: ', { message: "No Record(s) found"});
             var response = {
@@ -96,17 +96,21 @@ exports.getAllClient = async (req, res) => {
             records: resp,
             totalRecords: totalRecords
         }
+        Logger.log('info', TAG + ACTION + '[REFID:' + uuid + '] response: ', {message: "Successfully Retrieve all clients records"});
         res.status(200).json(response);
+    }catch(error){
+        Logger.log('error', TAG + ACTION + '[REFID:' + uuid + '] response: ', {message: error.message});
+        res.status(500).json({ error: error.message });
+    }
 }  
-
 /* Get Client record by username*/
-exports.getByUsername = async (req, res) => {
-    var ACTION = '[GET-CLIENT-RECORD-BY-USERNAME]';
+exports.getById = async (req, res) => {
+    var ACTION = '[GET-CLIENT-RECORD-BY-ID]';
 
-    const { username } = req.params;
+    const { id } = req.params;
     try {
-        const getClientByUsername = await clientsInformation.findOne({ username });
-        if (!getClientByUsername) {
+        const getClientById = await clientsInformation.findOne({ id });
+        if (!getClientById) {
             Logger.log('error', TAG + ACTION + '[REFID:' + uuid + '] response: ', { message: "No such record(s) found." });
             return res.status(404).json({ message: 'No such record(s) found' });
         }
@@ -114,18 +118,59 @@ exports.getByUsername = async (req, res) => {
         // Construct response object directly from getClientByUsername
         const response = {
             records: {
-                id: getClientByUsername.id,
-                username: getClientByUsername.username,
-                personalInformation: getClientByUsername.personalInformation,
-                workInformation: getClientByUsername.workInformation,
-                familyInformation: getClientByUsername.familyInformation,
-                beneficiary: getClientByUsername.beneficiary
+                id: getClientById.id,
+                username: getClientById.username,
+                personalInformation: getClientById.personalInformation
             }
         };
         res.status(200).json(response);
     } catch (error) {
-        console.error('Error fetching client by username:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        Logger.log('error', TAG + ACTION + '[REFID:' + uuid + '] response: ', {message: error.message});
+        res.status(500).json({ error: error.message });
     }
 };
+/* Delete Client by username*/
+exports.deleteById = async (req, res) => {
+    var ACTION = '[DELETE-CLIENT-RECORD]'
+    try {
+        const { id } = req.params;
+
+        // Delete document by username
+        const deletedUser = await clientsInformation.findOneAndDelete({ id });
+
+        if (!deletedUser) {
+            Logger.log('error', TAG + ACTION + '[REFID:' + uuid + '] response: ', { message: "No such record(s) found." });
+            return res.status(404).json({ message: 'No such user found' });
+        }
+        Logger.log('info', TAG + ACTION + '[REFID:' + uuid + '] response: ', { message: "Successfully deleted user" });
+        res.status(200).json({ message: 'User deleted successfully' });
+    } catch (error) {
+        Logger.log('error', TAG + ACTION + '[REFID:' + uuid + '] response: ', {message: error.message});
+        res.status(500).json({ error: error.message });
+    }
+};
+
+/*Update by Id*/
+exports.updateById = async (req, res) => {
+    var ACTION = '[UPDATE-CLIENT-INFORMATION]';
+
+    try {
+        const { username } = req.params;
+        const updateData = req.body;
+
+       // Find document by username and update
+        const updateUser = await clientsInformation.findOneAndUpdate({ username }, updateData, { new: true });
+
+        if (!updateUser) {
+            return res.status(404).json({ message: 'Client record(s) not found' });
+        }
+
+        Logger.log('info', TAG + ACTION + '[REFID:' + uuid + '] response: ', { message: "Successfully updated user" });
+        res.status(200).json({ message: 'Successfully update record(s)'});
+    } catch (error) {
+        Logger.log('error', TAG + ACTION + '[REFID:' + uuid + '] response: ', { message: error.message });
+        res.status(500).json({ error: error.message });
+    }
+};
+
 
