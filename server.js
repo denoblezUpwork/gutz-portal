@@ -15,6 +15,7 @@ app.use((req, res, next) => {
     console.log(req.path, req.method)
     next();
 })
+
 /* Route */
 app.use('/portal/api',  pruRoutes)
 

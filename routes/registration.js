@@ -1,22 +1,17 @@
 const express = require('express');
 
 const router = express.Router()
+const Controller = require('../controllers/newClientRegistration');
 
 //Get All Client Records
-router.get('/', (req, res) => {
-    res.json({msg: 'Get all records.'})
-});
+router.get('/', Controller.getAllClient);
 
 //Get a Single Client Record
-router.get('/:id', (req, res) => {
-    res.json({msg: 'Get Single record'})
-});
+router.get('/:username', Controller.getByUsername);
 
 
 //Post a new client record
-router.post('/', (req, res) => {
-    res.json({msg: 'Register new Client'})
-});
+router.post('/', Controller.addPruClient);
 
 //delete a new client record
 router.delete('/:id', (req, res) => {
