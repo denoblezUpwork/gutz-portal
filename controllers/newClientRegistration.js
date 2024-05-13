@@ -7,120 +7,203 @@ const {v4: uuidv4} = require('uuid');
 const uuid = uuidv4();
 
 
-/* Add new client */
-exports.addPruClient = async (req, res) => {
+exports.addPruClient = async (req, res) => {    
     var ACTION = '[NEW-CLIENT-REGISTRATION]'
 
-    const firstArray = req.body.personalInformation.firstName[0];
-    const secondArray = req.body.personalInformation.middleName[0];
-    const user = firstArray + secondArray + req.body.personalInformation.lastName.split(" ").join("");
-    const capitallize = user.toUpperCase();
-    const username = capitallize
+    /* Generate Password */
+    function generatePassword(length = 8) {
+        const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+";
+        let password = "";
+        for (let i = 0; i < length; i++) {
+            const randomIndex = Math.floor(Math.random() * charset.length);
+            password += charset[randomIndex];
+        }
+        return password;
+    }
+
+    const newPassword = generatePassword(10); 
+    const email = req.body.personalInformation.contactInformation.emailAddress
 
     try {
-        const newClient = new clientsInformation ({
-            username,
+        // Check if the email already exists
+        const existingClient = await clientsInformation.findOne({ "personalInformation.contactInformation.emailAddress": req.body.personalInformation.contactInformation.emailAddress });
+        if (existingClient) {
+            // If email exists, respond with an error message
+            let resp = {
+                message: "Client with the same email already exists.",
+                uuid: uuid,
+                trace: 'GUTZ-PRU'
+            };
+            Logger.log('info', TAG + ACTION + '[REFID:' + uuid + '] response: ', { message: "Client with the same email already exists." });
+            return res.status(400).json(resp);
+        }
+
+        /* If email does not exist, proceed with saving the new client */
+
+        // Custom validation for beneficiary age
+        const beneficiaries = req.body.insuranceCoverageDetails.beneficiaries;
+        if (beneficiaries && beneficiaries.length > 0) {
+            const now = new Date();
+            const cutoffDate = new Date(now.getFullYear() - 18, now.getMonth(), now.getDate());
+            let hasUnderageBeneficiary = false;
+
+            for (const beneficiary of beneficiaries) {
+                const dob = new Date(beneficiary.dateOfBirth);
+                if (dob > cutoffDate) {
+                    hasUnderageBeneficiary = true;
+                    console.warn(`Beneficiary with date of birth ${beneficiary.dateOfBirth} is below 18 years old.`);
+                }
+            }
+
+            if (hasUnderageBeneficiary) {
+                let resp = {
+                    message: "Successfully save new client, Hi! " + email + ". Your password is " + newPassword,
+                    details:{
+                        message: "Warning: Below 18 yrs old beneficiary will get all the benefits when he/she turn 18 years old",
+                    },
+                    uuid: uuid,
+                    trace: 'INSURANCE'
+                };
+                // Still proceed with saving the client data
+                Logger.log('info', TAG + ACTION + '[REFID:' + uuid + '] response: ', { message: "One or more beneficiaries are below 18 years old." });
+                res.status(200).json(resp);
+            }
+        }
+
+        const newClient = new clientsInformation({
             id: uuid,
             "personalInformation": {
-                "firstName": req.body.personalInformation.firstName,
-                "middleName": req.body.personalInformation.middleName,
-                "lastName": req.body.personalInformation.lastName,
-                "birthDate": req.body.personalInformation.birthDate,
-                "mobileNumber": req.body.personalInformation.mobileNumber,
-                "emailAddress": req.body.personalInformation.emailAddress,
-                "address": req.body.personalInformation.address,
-                "civilStatus": req.body.personalInformation.civilStatus,
-                "placeOfBirth": req.body.personalInformation.placeOfBirth
+                "fullName": req.body.personalInformation.fullName,
+                "dateOfBirth": req.body.personalInformation.dateOfBirth,
+                "gender": req.body.personalInformation.gender,
+                "maritalStatus": req.body.personalInformation.maritalStatus,
+                "contactInformation": {
+                    "address": req.body.personalInformation.contactInformation.address,
+                    "city": req.body.personalInformation.contactInformation.city,
+                    "stateProvince": req.body.personalInformation.contactInformation.stateProvince,
+                    "zipPostalCode": req.body.personalInformation.contactInformation.zipPostalCode,
+                    "emailAddress": req.body.personalInformation.contactInformation.emailAddress,
+                    "phoneNumber": req.body.personalInformation.contactInformation.phoneNumber
+                }
             },
-            "workInformation": {
-                "idType": req.body.workInformation.idType,
-                "idNumber": req.body.workInformation.idNumber,
-                "occupation": req.body.workInformation.occupation,
-                "natureOfWork": req.body.workInformation.natureOfWork,
-                "employerName": req.body.workInformation.employerName,
-                "companyAddress": req.body.workInformation.companyAddress,
-                "zipCode": req.body.workInformation.zipCode,
+            "employmentInformation": {
+                "employmentStatus": req.body.employmentInformation.employmentStatus,
+                "employer": req.body.employmentInformation.employer,
+                "occupation": req.body.employmentInformation.occupation,
             },
-            "familyInformation": {
-                "nameOfFather": req.body.familyInformation.nameOfFather,
-                "ageofFather": req.body.familyInformation.ageofFather,
-                "nameOfMother": req.body.familyInformation.nameOfMother,
-                "ageOfMother": req.body.familyInformation.ageOfMother,
+            "insuranceCoverageDetails": {
+                "sharePercentage": req.body.insuranceCoverageDetails.sharePercentage,
+                "beneficiaries": req.body.insuranceCoverageDetails.beneficiaries
             },
-            "beneficiary": req.body.beneficiary
-        })
+            "medicalHistory": {
+                "smoke": req.body.medicalHistory.smoke,
+                "preExistingConditions": req.body.medicalHistory.preExistingConditions,
+                "surgeriesInPast5Years": req.body.medicalHistory.surgeriesInPast5Years,
+                "specificConditions": req.body.medicalHistory.specificConditions,
+                "specificSurgeries": req.body.medicalHistory.specificSurgeries
+            },
+            "password": newPassword
+        });
+
         /* Save new client Data */
         const savedData = await newClient.save();
         let resp = {
-                message: "Successfully save new client" + " " + capitallize,
-                uuid: uuid,
-                trace: 'GUTZ-PRU'
+            message: "Successfully save new client, Hi! " + email + ". Your password is " + newPassword,
+            uuid: uuid,
+            trace: 'INSURANCE'
         }
-        Logger.log('info', TAG + ACTION + '[REFID:' + uuid + '] response: ', { message: "Successfuly save new client(s) record(s)."});
-        res.status(201).json(resp)
-    }catch(error){
-        Logger.log('error', TAG + ACTION + '[REFID:' + uuid + '] response: ', {message: error.message});
-        res.status(500).json({ error: error.message });
+        Logger.log('info', TAG + ACTION + '[REFID:' + uuid + '] response: ', { message: "Successfully save new client(s) record(s)." });
+        res.status(201).json(resp);
+    } catch (error) {
+        /* Handle Error */
+        const errMsg = {
+            "code": "F",
+            "description": "An error occurred while processing your request. Please try again later.",
+            "details": {
+                "message": error.message,
+                "uuid": uuid
+            }
+        }
+        res.status(500).json(errMsg);
     }
 }
+
 /* Get All Client*/
 exports.getAllClient = async (req, res) => {
-    var ACTION  = '[RETRIEVE-ALL-CLIENTS-RECORDS]'
-        
-    try{
-        const getAllClients = await clientsInformation.find({}).sort({createdAt: -1})
+    var ACTION = '[RETRIEVE-ALL-CLIENTS-RECORDS]';
+    
+    try {
+        const getAllClients = await clientsInformation.find({}).sort({ createdAt: -1 });
 
-        if(getAllClients.length <= 0){
-            Logger.log('error', TAG + ACTION + '[REFID:' + uuid + '] response: ', { message: "No Record(s) found"});
-            var response = {
-                'message': 'No Record(s) Found on our database.',
-                'uuid': uuid,
-                'trace': 'GUTZ-PRU'
-            }
-            res.status(404).json(response)
+        if (getAllClients.length <= 0) {
+            const response = {
+                message: 'No Record(s) Found on our database.',
+                uuid: uuid, // Make sure uuid is defined
+                trace: 'GUTZ-PRU'
+            };
+            Logger.log('error', TAG + ACTION + '[REFID:' + uuid + '] response: ', { message: response.message });
+            return res.status(404).json(response);
         }
-        let records = getAllClients;
-        let totalRecords = records.length;
-        let resp = records.map(record => {
-            let newRec = {
-                id :record.id,
-                username : record.username,
-                personalInformation: record.personalInformation,
-                workInformation: record.workInformation,
-                familyInformation: record.familyInformation,
-                beneficiary: record.beneficiary
+
+        const totalRecords = getAllClients.length;
+        const records = getAllClients.map(record => ({
+            id: record.id,
+            "personalInformation": {
+                "fullName": record.personalInformation.fullName,
+                "dateOfBirth": record.personalInformation.dateOfBirth,
+                "gender": record.personalInformation.gender,
+                "maritalStatus": record.personalInformation.maritalStatus,
+                "contactInformation": {
+                    "address": record.personalInformation.contactInformation.address,
+                    "city": record.personalInformation.contactInformation.city,
+                    "stateProvince": record.personalInformation.contactInformation.stateProvince,
+                    "zipPostalCode": record.personalInformation.contactInformation.zipPostalCode,
+                    "emailAddress": record.personalInformation.contactInformation.emailAddress,
+                    "phoneNumber": record.personalInformation.contactInformation.phoneNumber
+                }
+            },
+            "employmentInformation": record.employmentInformation,
+            "insuranceCoverageDetails": record.insuranceCoverageDetails,
+            "medicalHistory": record.medicalHistory
+        }));
+
+        const response = {
+            records: records,
+            totalRecords: totalRecords        
+        };
+        Logger.log('info', TAG + ACTION + '[REFID:' + uuid + '] response: ', { message: "Successfully Retrieve all clients records" });
+        return res.status(200).json(response);
+    } catch (error) {
+        Logger.log('error', TAG + ACTION + '[REFID:' + uuid + '] response: ', { message: error.message });
+        const errMsg = {
+            code: "F",
+            description: "An error occurred while processing your request. Please try again later.",
+            details: {
+                message: error.message,
+                uuid: uuid // Make sure uuid is defined
             }
-            return newRec
-        })
-        var response = {
-            records: resp,
-            totalRecords: totalRecords
-        }
-        Logger.log('info', TAG + ACTION + '[REFID:' + uuid + '] response: ', {message: "Successfully Retrieve all clients records"});
-        res.status(200).json(response);
-    }catch(error){
-        Logger.log('error', TAG + ACTION + '[REFID:' + uuid + '] response: ', {message: error.message});
-        res.status(500).json({ error: error.message });
+        };
+        return res.status(500).json(errMsg);
     }
-}  
+};
+
 /* Get Client record by username*/
-exports.getById = async (req, res) => {
+exports.getByEmail = async (req, res) => {
     var ACTION = '[GET-CLIENT-RECORD-BY-ID]';
 
-    const { id } = req.params;
+    const { email } = req.params;
     try {
-        const getClientById = await clientsInformation.findOne({ id });
-        if (!getClientById) {
+        const getClientByEmail = await clientsInformation.findOne({ "personalInformation.contactInformation.emailAddress": email });
+        if (!getClientByEmail) {
             Logger.log('error', TAG + ACTION + '[REFID:' + uuid + '] response: ', { message: "No such record(s) found." });
             return res.status(404).json({ message: 'No such record(s) found' });
         }
         Logger.log('info', TAG + ACTION + '[REFID:' + uuid + '] response: ', { message: "Successfully retrieve record(s)." });
         // Construct response object directly from getClientByUsername
         const response = {
-            records: {
-                id: getClientById.id,
-                username: getClientById.username,
-                personalInformation: getClientById.personalInformation
+            record: {
+                id: getClientByEmail.id,
+                email: getClientByEmail.personalInformation.contactInformation.emailAddress,
             }
         };
         res.status(200).json(response);
@@ -130,13 +213,13 @@ exports.getById = async (req, res) => {
     }
 };
 /* Delete Client by username*/
-exports.deleteById = async (req, res) => {
+exports.deleteByEmail = async (req, res) => {
     var ACTION = '[DELETE-CLIENT-RECORD]'
     try {
-        const { id } = req.params;
+        const { email } = req.params;
 
         // Delete document by username
-        const deletedUser = await clientsInformation.findOneAndDelete({ id });
+        const deletedUser = await clientsInformation.findOneAndDelete({ "personalInformation.contactInformation.emailAddress": email });
 
         if (!deletedUser) {
             Logger.log('error', TAG + ACTION + '[REFID:' + uuid + '] response: ', { message: "No such record(s) found." });
@@ -150,16 +233,16 @@ exports.deleteById = async (req, res) => {
     }
 };
 
-/*Update by Id*/
-exports.updateById = async (req, res) => {
+/*Update by email*/
+exports.updateByEmail = async (req, res) => {
     var ACTION = '[UPDATE-CLIENT-INFORMATION]';
 
     try {
-        const { username } = req.params;
+        const { email } = req.params;
         const updateData = req.body;
 
        // Find document by username and update
-        const updateUser = await clientsInformation.findOneAndUpdate({ username }, updateData, { new: true });
+        const updateUser = await clientsInformation.findOneAndUpdate({ "personalInformation.contactInformation.emailAddress": email }, updateData, { new: true });
 
         if (!updateUser) {
             return res.status(404).json({ message: 'Client record(s) not found' });
@@ -172,5 +255,39 @@ exports.updateById = async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 };
+
+/* Update password*/
+exports.updatePassword = async (req, res) => {
+    var ACTION = '[UPDATE-CLIENT-PASSWORD-BY-EMAIL]';
+
+    try {
+        const { email } = req.params;
+        const { oldPassword, newPassword } = req.body;
+
+        // Find the client by email
+        const client = await clientsInformation.findOne({ "personalInformation.contactInformation.emailAddress": email });
+
+        // Check if the client exists
+        if (!client) {
+            return res.status(404).json({ message: 'Client record(s) not found' });
+        }
+
+        // Verify old password
+        if (client.password !== oldPassword) {
+            return res.status(400).json({ message: 'Old password is incorrect' });
+        }
+
+        // Update the password
+        client.password = newPassword;
+        const updatedClient = await client.save();
+
+        Logger.log('info', TAG + ACTION + '[REFID:' + uuid + '] response: ', { message: "Successfully updated client password" });
+        res.status(200).json({ message: 'Successfully updated password' });
+    } catch (error) {
+        Logger.log('error', TAG + ACTION + '[REFID:' + uuid + '] response: ', { message: error.message });
+        res.status(500).json({ error: error.message });
+    }
+};
+
 
 
