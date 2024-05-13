@@ -1,51 +1,134 @@
 const mongoose = require('mongoose');
-const Schema = mongoose.Schema
-
+const Schema = mongoose.Schema;
 
 const clientSchema = new Schema({
-    username:{
+    id: {
         type: String,
-        require: true
+        required: true
     },
-    id:{
-        type: String,
-        require: true
+    personalInformation:{
+        fullName: {
+            type: String,
+            required: true
+        },
+        dateOfBirth: {
+            type: String,
+            validate: {
+                validator: function(v) {
+                    // Validate date format (MM/DD/YYYY)
+                    return /^\d{2}\/\d{2}\/\d{4}$/.test(v);
+                },
+                message: props => `${props.value} is not a valid date in MM/DD/YYYY format!`
+            },
+            required: true
+        },
+        gender: {
+            type: String,
+            enum: ['Male', 'Female', 'Other'],
+            required: true,
+            validate: {
+                validator: function(value) {
+                    return ['Male', 'Female', 'Other'].includes(value);
+                },
+                message: props => `${props.value} is not a valid gender. Gender must be Male, Female, or Other.`
+            }
+        },
+        maritalStatus: {
+            type: String,
+            enum: ['Single', 'Married', 'Divorced', 'Widowed'],
+            required: true,
+            validate: {
+                validator: function(value) {
+                    return ['Single', 'Married', 'Divorced', 'Widowed'].includes(value);
+                },
+                message: props => `${props.value} is not a valid marital status. Marital status must be Single, Married, Divorced, or Widowed.`
+            }
+        },
+        contactInformation: {
+            address: { type: String, required: true },
+            city: { type: String, required: true },
+            stateProvince: { type: String, required: true },
+            zipPostalCode: { type: String, required: true },
+            emailAddress: { type: String, required: true },
+            phoneNumber: {
+                type: String,
+                required: true,
+                validate: {
+                    validator: function(value) {
+                        // Validate phone number format (+63XXXXXXXXXX or 09XXXXXXXXX)
+                        return /^(?:\+63|09)\d{10}$/.test(value);
+                    },
+                    message: props => `${props.value} is not a valid phone number. Phone number must start with '+63' or '09' followed by 9 digits.`
+                }
+            }
+        }
     },
-    personalInformation: {
-        firstName: String,
-        middleName: String,
-        lastName: String,
-        birthDate: Date,
-        mobileNumber: String,
-        emailAddress: { type: String, unique: true },
-        address: String,
-        civilStatus: String,
-        placeOfBirth: String
+    employmentInformation: {
+        employmentStatus: {
+            type: String,
+            enum: ['Employed', 'Self-Employed', 'Unemployed', 'Retired'],
+            required: true,
+            validate: {
+                validator: function(value) {
+                    return ['Employed', 'Self-Employed', 'Unemployed', 'Retired'].includes(value);
+                },
+                message: props => `${props.value} is not a valid employment status. Employment status must be one of: Employed, Self-Employed, Unemployed, or Retired.`
+            }
+        },
+        employer: { type: String },
+        occupation: { type: String }
     },
-    workInformation: {
-        idType: String,
-        idNumber: String,
-        occupation: String,
-        natureOfWork: String,
-        employerName: String,
-        companyAddress: String,
-        zipCode: String
+    insuranceCoverageDetails: {
+        sharePercentage: {
+            type: Number,
+            required: true,
+            min: 0,
+            max: 100
+        },
+        beneficiaries: [{
+            name: String,
+            dateOfBirth: String
+        }]
     },
-    familyInformation: {
-        nameOfFather: String,
-        ageofFather: Number,
-        nameOfMother: String,
-        ageOfMother: Number
+    medicalHistory: {
+        smoke: { type: String, enum: ['Yes', 'No'], required: true },
+        preExistingConditions: { type: String, enum: ['Yes', 'No'], required: true, validate: {
+            validator: function(value) {
+                return ['Yes', 'No'].includes(value);
+            },
+            message: props => `${props.value} is not a valid value for preExistingConditions. Please provide either 'Yes' or 'No'.`
+        } },
+        surgeriesInPast5Years: { type: String, enum: ['Yes', 'No'], required: true, validate: {
+            validator: function(value) {
+                return ['Yes', 'No'].includes(value);
+            },
+            message: props => `${props.value} is not a valid value for surgeriesInPast5Years. Please provide either 'Yes' or 'No'.`
+        } },
+        specificSurgeries: { type: String },
+        specificConditions: { type: String }
     },
-    beneficiary: [{
-        fullName: String,
-        birthDate: Date,
-        relationshipToInsured: String,
-        percentOfShare: Number,
-        cityOfBirth: String,
-        mobileNumber: String,
-        emailAddress: String
-    }],
-},{timestamps: true})
+    password: { type: String, required: true,  maxlength: [50, 'Password must be at most 50 characters long'] }
+}, { timestamps: true });
 
-module.exports = mongoose.model('clientsInformation', clientSchema)
+// Custom validator for beneficiary age
+clientSchema.path('insuranceCoverageDetails.beneficiaries').validate(function(beneficiaries) {
+    if (!beneficiaries || beneficiaries.length === 0) {
+        return true; // Allow other validations to catch missing fields
+    }
+
+    // Check all beneficiaries' age and issue a warning if any is below 18
+    const now = new Date();
+    const cutoffDate = new Date(now.getFullYear() - 18, now.getMonth(), now.getDate());
+
+    for (const beneficiary of beneficiaries) {
+        const dob = new Date(beneficiary.dateOfBirth);
+        if (dob > cutoffDate) {
+            console.warn(`Beneficiary with date of birth ${beneficiary.dateOfBirth} is below 18 years old.`);
+        }
+    }
+
+    return true; // Proceed with saving the document
+}, 'Warning: One or more beneficiaries are below 18 years old.');
+
+
+module.exports = mongoose.model('clientsInformation', clientSchema);
