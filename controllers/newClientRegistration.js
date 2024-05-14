@@ -71,7 +71,6 @@ exports.addPruClient = async (req, res) => {
         }
 
         const newClient = new clientsInformation({
-            id: uuid,
             "personalInformation": {
                 "fullName": req.body.personalInformation.fullName,
                 "dateOfBirth": req.body.personalInformation.dateOfBirth,
@@ -147,8 +146,8 @@ exports.getAllClient = async (req, res) => {
 
         const totalRecords = getAllClients.length;
         const records = getAllClients.map(record => ({
-            id: record.id,
             "personalInformation": {
+                "id": record._id,
                 "fullName": record.personalInformation.fullName,
                 "dateOfBirth": record.personalInformation.dateOfBirth,
                 "gender": record.personalInformation.gender,
@@ -202,7 +201,7 @@ exports.getByEmail = async (req, res) => {
         // Construct response object directly from getClientByUsername
         const response = {
             record: {
-                id: getClientByEmail.id,
+                id: getClientByEmail._id,
                 email: getClientByEmail.personalInformation.contactInformation.emailAddress,
             }
         };

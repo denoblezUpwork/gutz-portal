@@ -1,10 +1,11 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
+const { v4: uuidv4 } = require('uuid');
 
-const clientSchema = new Schema({
-    id: {
+const clientSchema = new mongoose.Schema({
+    _id: {
         type: String,
-        required: true
+        default: () => uuidv4()// Generate UUID for new documents
     },
     personalInformation:{
         fullName: {
