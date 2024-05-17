@@ -7,69 +7,58 @@ const {v4: uuidv4} = require('uuid');
 const uuid = uuidv4();
 
 
-exports.addPruClient = async (req, res) => {    
-    var ACTION = '[NEW-CLIENT-REGISTRATION]'
-
-    /* Generate Password */
-    function generatePassword(length = 8) {
-        const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+";
-        let password = "";
-        for (let i = 0; i < length; i++) {
-            const randomIndex = Math.floor(Math.random() * charset.length);
-            password += charset[randomIndex];
-        }
-        return password;
-    }
-
-    const newPassword = generatePassword(10); 
-    const email = req.body.personalInformation.contactInformation.emailAddress
+exports.addPruClient = async (req, res) => {
+    var ACTION = '[NEW-CLIENT-REGISTRATION]';
+    const uuid = req.headers['x-request-id']; // Assuming you have a unique request ID
 
     try {
+        var email = req.body.personalInformation.contactInformation.emailAddress;
+
+        // Generate password
+        function generatePassword(length = 8) {
+            const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+";
+            let password = "";
+            for (let i = 0; i < length; i++) {
+                const randomIndex = Math.floor(Math.random() * charset.length);
+                password += charset[randomIndex];
+            }
+            return password;
+        }
+        var newPassword = generatePassword(20); // Change to generatePassword(20) instead of generatePassword[20]
+
         // Check if the email already exists
-        const existingClient = await clientsInformation.findOne({ "personalInformation.contactInformation.emailAddress": req.body.personalInformation.contactInformation.emailAddress });
+        let existingClient = await clientsInformation.findOne({ "personalInformation.contactInformation.emailAddress": email });
         if (existingClient) {
             // If email exists, respond with an error message
             let resp = {
+                code: "F",
                 message: "Client with the same email already exists.",
                 uuid: uuid,
                 trace: 'GUTZ-PRU'
             };
-            Logger.log('info', TAG + ACTION + '[REFID:' + uuid + '] response: ', { message: "Client with the same email already exists." });
+            Logger.log('error', TAG + ACTION + '[REFID:' + uuid + '] response: ', { message: "Client with the same email already exists." });
             return res.status(400).json(resp);
         }
 
-        /* If email does not exist, proceed with saving the new client */
-
         // Custom validation for beneficiary age
         const beneficiaries = req.body.insuranceCoverageDetails.beneficiaries;
+        let hasUnderageBeneficiary = false;
+
         if (beneficiaries && beneficiaries.length > 0) {
             const now = new Date();
             const cutoffDate = new Date(now.getFullYear() - 18, now.getMonth(), now.getDate());
-            let hasUnderageBeneficiary = false;
 
             for (const beneficiary of beneficiaries) {
                 const dob = new Date(beneficiary.dateOfBirth);
                 if (dob > cutoffDate) {
                     hasUnderageBeneficiary = true;
                     console.warn(`Beneficiary with date of birth ${beneficiary.dateOfBirth} is below 18 years old.`);
+                    break; // Stop the loop once an underage beneficiary is found
                 }
-            }
-
-            if (hasUnderageBeneficiary) {
-                let resp = {
-                    message: "Successfully save new client, Hi! " + email + ". Your password is " + newPassword,
-                    details:{
-                        message: "Warning: Below 18 yrs old beneficiary will get all the benefits when he/she turn 18 years old",
-                    },
-                    uuid: uuid,
-                    trace: 'INSURANCE'
-                };
-                // Still proceed with saving the client data
-                Logger.log('info', TAG + ACTION + '[REFID:' + uuid + '] response: ', { message: "One or more beneficiaries are below 18 years old." });
-                res.status(200).json(resp);
             }
         }
 
+        // Construct new client object
         const newClient = new clientsInformation({
             "personalInformation": {
                 "fullName": req.body.personalInformation.fullName,
@@ -106,14 +95,29 @@ exports.addPruClient = async (req, res) => {
 
         /* Save new client Data */
         const savedData = await newClient.save();
-        let resp = {
-            message: "Successfully save new client, Hi! " + email + ". Your password is " + newPassword,
-            uuid: uuid,
-            trace: 'INSURANCE'
+
+        let resp;
+        if (hasUnderageBeneficiary) {
+            resp = {
+                message: "Successfully save new client, Hi! " + email + ". Your password is " + newPassword,
+                details: {
+                    message: "Warning: Below 18 years old beneficiary will get all the benefits until they turn 18 years old.",
+                },
+                uuid: uuid,
+                trace: 'INSURANCE'
+            };
+        } else {
+            resp = {
+                message: "Successfully save new client, Hi! " + email + ". Your password is " + newPassword,
+                uuid: uuid,
+                trace: 'INSURANCE'
+            };
         }
+
         Logger.log('info', TAG + ACTION + '[REFID:' + uuid + '] response: ', { message: "Successfully save new client(s) record(s)." });
         res.status(201).json(resp);
     } catch (error) {
+        console.log('=====', error)
         /* Handle Error */
         const errMsg = {
             "code": "F",
@@ -126,6 +130,9 @@ exports.addPruClient = async (req, res) => {
         res.status(500).json(errMsg);
     }
 }
+
+
+
 
 /* Get All Client*/
 exports.getAllClient = async (req, res) => {
