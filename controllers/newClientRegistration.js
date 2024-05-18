@@ -14,6 +14,20 @@ exports.addPruClient = async (req, res) => {
     try {
         var email = req.body.personalInformation.contactInformation.emailAddress;
 
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) {
+                throw new Error(`Invalid date format: ${dateString}`);
+            }
+            const month = (date.getMonth() + 1).toString().padStart(2, '0'); // Extract month and pad with leading zero if necessary
+            const day = date.getDate().toString().padStart(2, '0'); // Extract day and pad with leading zero if necessary
+            const year = date.getFullYear(); // Extract year
+            return `${month}/${day}/${year}`; // Format as MM/DD/YYYY
+        }
+        
+        
+        
+
         // Generate password
         function generatePassword(length = 8) {
             const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+";
@@ -62,7 +76,7 @@ exports.addPruClient = async (req, res) => {
         const newClient = new clientsInformation({
             "personalInformation": {
                 "fullName": req.body.personalInformation.fullName,
-                "dateOfBirth": req.body.personalInformation.dateOfBirth,
+                "dateOfBirth": formatDate(req.body.personalInformation.dateOfBirth),
                 "gender": req.body.personalInformation.gender,
                 "maritalStatus": req.body.personalInformation.maritalStatus,
                 "contactInformation": {
@@ -80,8 +94,11 @@ exports.addPruClient = async (req, res) => {
                 "occupation": req.body.employmentInformation.occupation,
             },
             "insuranceCoverageDetails": {
-                "sharePercentage": req.body.insuranceCoverageDetails.sharePercentage,
-                "beneficiaries": req.body.insuranceCoverageDetails.beneficiaries
+                "beneficiaries": req.body.insuranceCoverageDetails.beneficiaries.map(beneficiary => ({
+                    ...beneficiary,
+                    dateOfBirth: formatDate(beneficiary.dateOfBirth),
+                    sharePercentages: beneficiary.sharePercentages // Include share percentages as an array
+                }))
             },
             "medicalHistory": {
                 "smoke": req.body.medicalHistory.smoke,
@@ -117,7 +134,6 @@ exports.addPruClient = async (req, res) => {
         Logger.log('info', TAG + ACTION + '[REFID:' + uuid + '] response: ', { message: "Successfully save new client(s) record(s)." });
         res.status(201).json(resp);
     } catch (error) {
-        console.log('=====', error)
         /* Handle Error */
         const errMsg = {
             "code": "F",
