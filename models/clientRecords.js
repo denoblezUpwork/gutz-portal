@@ -80,15 +80,15 @@ const clientSchema = new mongoose.Schema({
         occupation: { type: String }
     },
     insuranceCoverageDetails: {
-        sharePercentage: {
-            type: Number,
-            required: true,
-            min: 0,
-            max: 100
-        },
         beneficiaries: [{
             name: String,
-            dateOfBirth: String
+            dateOfBirth: String,
+            sharePercentage: {
+                type: Number,
+                required: true,
+                min: 0,
+                max: 100
+            }
         }]
     },
     medicalHistory: {
